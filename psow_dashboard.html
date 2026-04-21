@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSOW Tracker Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #f4f3ef;
+    --surface:  #ffffff;
+    --border:   #e0ddd6;
+    --border2:  #c8c4bb;
+    --text:     #1a1916;
+    --muted:    #6b6860;
+    --accent:   #1a1916;
+    --blue:     #2563b8;
+    --blue-l:   #dbeafe;
+    --green:    #15803d;
+    --green-l:  #dcfce7;
+    --red:      #b91c1c;
+    --red-l:    #fee2e2;
+    --amber:    #92400e;
+    --amber-l:  #fef3c7;
+    --purple:   #6d28d9;
+    --purple-l: #ede9fe;
+    --gray:     #52524e;
+    --gray-l:   #f1f0ed;
+    --radius:   8px;
+    --radius-lg: 12px;
+    --shadow:   0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ── Upload Screen ── */
+  #upload-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+  .upload-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 3rem 3.5rem;
+    text-align: center;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: var(--shadow);
+  }
+  .upload-card h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+  .upload-card p  { color: var(--muted); font-size: 13px; margin-bottom: 2rem; }
+  .upload-icon {
+    width: 64px; height: 64px; margin: 0 auto 1.5rem;
+    background: var(--gray-l); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .upload-icon svg { width: 28px; height: 28px; stroke: var(--muted); }
+  .upload-zone {
+    border: 2px dashed var(--border2); border-radius: var(--radius);
+    padding: 2rem 1.5rem; cursor: pointer; transition: all 0.15s;
+    margin-bottom: 1rem;
+  }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: var(--blue); background: var(--blue-l); }
+  .upload-zone span { font-size: 13px; color: var(--muted); }
+  .upload-zone strong { color: var(--blue); }
+  #file-input { display: none; }
+  .upload-note { font-size: 11px; color: var(--muted); }
+  .col-map-section { margin-top: 1.5rem; text-align: left; }
+  .col-map-section h3 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 0.75rem; }
+  .col-map-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .col-map-item { font-size: 11px; color: var(--muted); }
+  .col-map-item strong { color: var(--text); font-weight: 500; display: block; }
+  .btn-primary {
+    background: var(--text); color: #fff; border: none; border-radius: var(--radius);
+    padding: 0.6rem 1.5rem; font-size: 13px; font-weight: 500; cursor: pointer;
+    font-family: inherit; transition: opacity 0.15s; margin-top: 1rem;
+  }
+  .btn-primary:hover { opacity: 0.85; }
+  #upload-error { color: var(--red); font-size: 12px; margin-top: 0.75rem; display: none; }
+
+  /* ── Dashboard ── */
+  #dashboard { display: none; }
+
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 56px; position: sticky; top: 0; z-index: 100;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 1rem; }
+  .topbar h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .topbar-badge { font-size: 11px; background: var(--gray-l); color: var(--muted); padding: 3px 8px; border-radius: 20px; font-family: 'DM Mono', monospace; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .btn-reload { background: none; border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 12px; font-size: 12px; font-weight: 500; cursor: pointer; color: var(--muted); font-family: inherit; transition: all 0.15s; display: flex; align-items: center; gap: 5px; }
+  .btn-reload:hover { border-color: var(--border2); color: var(--text); }
+
+  /* Panel toggle nav */
+  .panel-nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; gap: 0; overflow-x: auto;
+  }
+  .panel-tab {
+    padding: 10px 16px; font-size: 12px; font-weight: 500; color: var(--muted);
+    cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap;
+    transition: all 0.15s; user-select: none; background: none; border-top: none; border-left: none; border-right: none;
+    font-family: inherit;
+  }
+  .panel-tab:hover { color: var(--text); }
+  .panel-tab.active { color: var(--text); border-bottom-color: var(--text); }
+
+  /* Filters bar */
+  .filters-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 2rem;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  }
+  .filter-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-right: 4px; }
+  .filter-select {
+    font-size: 12px; font-family: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 5px 28px 5px 10px; cursor: pointer; outline: none;
+    appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b6860' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center;
+    transition: border-color 0.15s;
+  }
+  .filter-select:hover, .filter-select:focus { border-color: var(--border2); }
+  .filter-clear { font-size: 11px; color: var(--blue); cursor: pointer; padding: 5px 8px; border-radius: var(--radius); transition: background 0.15s; }
+  .filter-clear:hover { background: var(--blue-l); }
+
+  /* Main content */
+  .main { padding: 2rem; max-width: 1400px; margin: 0 auto; }
+  .panel-section { display: none; }
+  .panel-section.active { display: block; }
+
+  /* Metric cards */
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 1.5rem; }
+  .metric-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+  }
+  .metric-card .m-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .metric-card .m-value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; margin-bottom: 4px; }
+  .metric-card .m-sub { font-size: 11px; color: var(--muted); }
+
+  /* Chart cards */
+  .chart-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 1.25rem;
+  }
+  .chart-card.full { margin-bottom: 16px; }
+  .card-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 4px; }
+  .card-note { font-size: 11px; color: var(--muted); font-style: italic; margin-bottom: 12px; }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); cursor: pointer; user-select: none; transition: opacity 0.15s; }
+  .legend-item:hover { color: var(--text); }
+  .legend-item.hidden { opacity: 0.35; }
+  .legend-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+  /* Doughnut layout */
+  .donut-layout { display: flex; gap: 20px; align-items: flex-start; }
+  .donut-wrap { position: relative; width: 180px; height: 180px; flex-shrink: 0; }
+  .donut-legend { flex: 1; padding-top: 4px; }
+  .donut-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; font-size: 11px; }
+  .donut-row-left { display: flex; align-items: center; gap: 5px; color: var(--muted); flex: 1; }
+  .donut-row-right { display: flex; gap: 10px; }
+  .donut-count { font-weight: 600; color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px; }
+  .donut-pct { color: var(--muted); font-size: 11px; min-width: 30px; text-align: right; }
+
+  /* Stage bars */
+  .stage-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .stage-label { font-size: 11px; color: var(--muted); width: 155px; flex-shrink: 0; text-align: right; }
+  .stage-track { flex: 1; background: var(--gray-l); border-radius: 4px; height: 22px; overflow: hidden; }
+  .stage-bar { height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; min-width: 40px; transition: width 0.4s ease; }
+  .stage-bar span { color: #fff; font-size: 10px; font-weight: 600; white-space: nowrap; }
+
+  /* Table */
+  .data-table-wrap { overflow-x: auto; }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .data-table th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
+  .data-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: var(--gray-l); }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 500; }
+  .pill-blue   { background: var(--blue-l);   color: var(--blue); }
+  .pill-green  { background: var(--green-l);  color: var(--green); }
+  .pill-red    { background: var(--red-l);    color: var(--red); }
+  .pill-amber  { background: var(--amber-l);  color: var(--amber); }
+  .pill-purple { background: var(--purple-l); color: var(--purple); }
+  .pill-gray   { background: var(--gray-l);   color: var(--gray); }
+
+  /* Forecast config */
+  .cfg-row { margin-bottom: 14px; }
+  .cfg-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+  .cfg-name { font-size: 12px; font-weight: 500; color: var(--text); }
+  .cfg-hint { font-size: 11px; color: var(--muted); margin-bottom: 5px; line-height: 1.5; }
+  .cfg-data-ref { font-style: normal; font-weight: 500; color: var(--blue); }
+  .cfg-val { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; color: var(--text); background: var(--gray-l); padding: 1px 8px; border-radius: 4px; white-space: nowrap; }
+  .cfg-range-ends { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .cfg-section-head { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .cfg-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 20px; font-size: 11px; background: var(--surface); border: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+  .cfg-chip-label { color: var(--muted); }
+  .cfg-chip-val { font-family: 'DM Mono', monospace; font-weight: 500; color: var(--blue); }
+  input[type=range] { width: 100%; accent-color: var(--blue); cursor: pointer; }
+
+  /* Forecast info box */
+  .info-box { background: var(--amber-l); border: 1px solid #fcd34d; border-radius: var(--radius); padding: 10px 14px; font-size: 11px; color: var(--amber); margin-bottom: 14px; line-height: 1.6; }
+  .info-box strong { font-weight: 600; }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    .chart-grid-2 { grid-template-columns: 1fr; }
+    .donut-layout { flex-direction: column; }
+    .main { padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════ UPLOAD SCREEN ══════════════════════ -->
+<div id="upload-screen">
+  <div class="upload-card">
+    <div class="upload-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/>
+      </svg>
+    </div>
+    <h1>PSOW Tracker Dashboard</h1>
+    <p>Load your SOW Tracker Excel file to generate all charts and analysis.</p>
+
+    <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <input type="file" id="file-input" accept=".xlsx,.xls">
+      <span><strong>Click to browse</strong> or drag &amp; drop your .xlsx file here</span>
+    </div>
+    <div class="upload-note">Reads the <strong>SOW Tracker</strong> sheet. Your data never leaves your browser.</div>
+    <div id="upload-error"></div>
+
+    <div class="col-map-section">
+      <h3>Expected columns (row 2 header)</h3>
+      <div class="col-map-grid">
+        <div class="col-map-item"><strong>SOW Reference No.</strong>Col A — unique ID</div>
+        <div class="col-map-item"><strong>Value (or Current Price)</strong>Col F — value</div>
+        <div class="col-map-item"><strong>Initial PSOW Received…</strong>Col G — receipt date</div>
+        <div class="col-map-item"><strong>Overall Status</strong>Col L — status</div>
+        <div class="col-map-item"><strong>Start Date (or SOW Start Date)</strong>Col J — start date</div>
+        <div class="col-map-item"><strong>Our Team Owner</strong>Col N — owner</div>
+        <div class="col-map-item"><strong>Category</strong>Col D — type</div>
+        <div class="col-map-item"><strong>Working At risk</strong>Col E — risk flag</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ DASHBOARD ══════════════════════ -->
+<div id="dashboard">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>PSOW Tracker Dashboard</h1>
+      <span class="topbar-badge" id="file-badge">—</span>
+      <span class="topbar-badge" id="record-badge">—</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-reload" onclick="resetDashboard()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+        Load new file
+      </button>
+    </div>
+  </div>
+
+  <!-- Panel nav -->
+  <div class="panel-nav">
+    <button class="panel-tab active" onclick="showPanel('status', this)">Overall status</button>
+    <button class="panel-tab" onclick="showPanel('owners', this)">Owners &amp; value</button>
+    <button class="panel-tab" onclick="showPanel('trend', this)">Trend analysis</button>
+    <button class="panel-tab" onclick="showPanel('value', this)">Value timeline</button>
+    <button class="panel-tab" onclick="showPanel('forecast', this)">Forecast</button>
+    <button class="panel-tab" onclick="showPanel('table', this)">Data table</button>
+  </div>
+
+  <!-- Filters bar -->
+  <div class="filters-bar">
+    <span class="filter-label">Filter</span>
+    <select class="filter-select" id="f-status" onchange="applyFilters()"><option value="">All statuses</option></select>
+    <select class="filter-select" id="f-category" onchange="applyFilters()"><option value="">All categories</option></select>
+    <select class="filter-select" id="f-owner" onchange="applyFilters()"><option value="">All owners</option></select>
+    <select class="filter-select" id="f-risk" onchange="applyFilters()"><option value="">All risk levels</option></select>
+    <span class="filter-clear" onclick="clearFilters()">✕ Clear filters</span>
+    <span style="font-size:11px;color:var(--muted);margin-left:4px;" id="filter-count"></span>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- ── STATUS PANEL ── -->
+    <div class="panel-section active" id="panel-status">
+      <div class="metric-grid" id="metrics-status"></div>
+      <div class="chart-grid-2">
+        <div class="chart-card">
+          <div class="card-title">Overall status</div>
+          <div class="donut-layout">
+            <div class="donut-wrap"><canvas id="c-donut" role="img" aria-label="Overall status doughnut chart"></canvas></div>
+            <div class="donut-legend" id="donut-legend"></div>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="card-title">Pipeline stage — all PSOWs</div>
+          <div id="stage-bars" style="padding-top:6px"></div>
+        </div>
+      </div>
+      <div class="chart-card full">
+        <div class="card-title">PSOWs by category</div>
+        <div style="position:relative;height:200px"><canvas id="c-category" role="img" aria-label="Category bar chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ── OWNERS PANEL ── -->
+    <div class="panel-section" id="panel-owners">
+      <div class="metric-grid" id="metrics-owners"></div>
+      <div class="chart-card full">
+        <div class="card-title">Owner workload — PSOW count by status</div>
+        <div style="position:relative;height:320px"><canvas id="c-owner-stack" role="img" aria-label="Stacked bar chart of owner workload"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <div class="card-title">SOW value by owner (known values only)</div>
+        <div style="position:relative;height:240px"><canvas id="c-owner-value" role="img" aria-label="Owner value bar chart"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <div class="card-title">SOW value by status</div>
+        <div style="position:relative;height:240px"><canvas id="c-value-status" role="img" aria-label="Value by status bar chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ── TREND PANEL ── -->
+    <div class="panel-section" id="panel-trend">
+      <div class="metric-grid" id="metrics-trend"></div>
+      <div class="chart-card full">
+        <div class="card-title">Monthly intake vs outcomes — by received date</div>
+        <div class="legend" id="leg-trend"></div>
+        <div style="position:relative;height:240px"><canvas id="c-trend-monthly" role="img" aria-label="Monthly intake trend chart"></canvas></div>
+      </div>
+      <div class="chart-grid-2">
+        <div class="chart-card">
+          <div class="card-title">Avg turnaround days by status</div>
+          <div style="position:relative;height:280px"><canvas id="c-turnaround" role="img" aria-label="Turnaround bar chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="card-title">Active gap — cumulative by received month</div>
+          <div class="legend" id="leg-gap"></div>
+          <div style="position:relative;height:240px"><canvas id="c-gap" role="img" aria-label="Active gap cumulative chart"></canvas></div>
+        </div>
+      </div>
+      <div class="chart-card full">
+        <div class="card-title">Cumulative PSOWs — received, progressed, withdrawn &amp; active gap</div>
+        <div class="legend" id="leg-cum"></div>
+        <div style="position:relative;height:260px"><canvas id="c-cumulative" role="img" aria-label="Cumulative PSOW chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ── VALUE PANEL ── -->
+    <div class="panel-section" id="panel-value">
+      <div class="metric-grid" id="metrics-value"></div>
+      <div class="chart-card full">
+        <div class="card-note">X-axis = SOW Start Date · Y-axis = Current Price · Only PSOWs with both fields populated</div>
+        <div class="card-title">Monthly SOW value by start date</div>
+        <div style="position:relative;height:260px"><canvas id="c-val-monthly" role="img" aria-label="Monthly value bar chart"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <div class="card-title">Cumulative SOW value by start date</div>
+        <div class="legend" id="leg-val-cum"></div>
+        <div style="position:relative;height:300px"><canvas id="c-val-cum" role="img" aria-label="Cumulative value chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ── FORECAST PANEL ── -->
+    <div class="panel-section" id="panel-forecast">
+
+      <!-- Config panel -->
+      <div class="chart-card full" style="margin-bottom:16px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+          <div class="card-title">Forecast configuration</div>
+          <span style="font-size:11px;color:var(--muted)">Defaults set from your data · charts update live</span>
+        </div>
+        <div id="cfg-context-bar" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;padding:10px 12px;background:var(--bg);border-radius:var(--radius);border:1px solid var(--border)"></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:24px 36px">
+
+          <!-- Col 1: Pipeline rates -->
+          <div>
+            <div class="cfg-section-head">Pipeline rates</div>
+            <div class="cfg-row">
+              <div class="cfg-label-row"><span class="cfg-name">Progression rate</span><span class="cfg-val" id="lbl-prog-rate">50%</span></div>
+              <div class="cfg-hint">% of received PSOWs that reach In Delivery / Completed / ME / Signed. <span class="cfg-data-ref" id="ref-prog-rate"></span></div>
+              <input type="range" id="cfg-prog-rate" min="10" max="100" step="1" value="50" oninput="syncCfg('prog-rate',this.value+'%');rerunForecast()">
+              <div class="cfg-range-ends"><span>10%</span><span>100%</span></div>
+            </div>
+            <div class="cfg-row">
+              <div class="cfg-label-row"><span class="cfg-name">Withdrawal rate</span><span class="cfg-val" id="lbl-withd-rate">22%</span></div>
+              <div class="cfg-hint">% of received PSOWs withdrawn before delivery. <span class="cfg-data-ref" id="ref-withd-rate"></span></div>
+              <input type="range" id="cfg-withd-rate" min="0" max="80" step="1" value="22" oninput="syncCfg('withd-rate',this.value+'%');rerunForecast()">
+              <div class="cfg-range-ends"><span>0%</span><span>80%</span></div>
+            </div>
+            <div class="cfg-row">
+              <div class="cfg-label-row"><span class="cfg-name">Annual intake growth</span><span class="cfg-val" id="lbl-growth">2%</span></div>
+              <div class="cfg-hint">Year-on-year growth in PSOWs received per month. <span class="cfg-data-ref" id="ref-growth"></span></div>
+              <input type="range" id="cfg-growth" min="-10" max="30" step="1" value="2" oninput="syncCfg('growth',this.value+'%');rerunForecast()">
+              <div class="cfg-range-ends"><span>-10%</span><span>+30%</span></div>
+            </div>
+            <div class="cfg-row">
+              <div class="cfg-label-row"><span class="cfg-name">Turnaround improvement pa</span><span class="cfg-val" id="lbl-ta-improve">10%</span></div>
+              <div class="cfg-hint">Annual reduction in avg days from receipt to submission. <span class="cfg-data-ref" id="ref-ta-improve"></span></div>
+              <input type="range" id="cfg-ta-improve" min="0" max="40" step="1" value="10" oninput="syncCfg('ta-improve',this.value+'%');rerunForecast()">
+              <div class="cfg-range-ends"><span>0%</span><span>40%</span></div>
+            </div>
+            <div class="cfg-row">
+              <div class="cfg-label-row"><span class="cfg-name">Forecast horizon</span><span class="cfg-val" id="lbl-horizon">37 months</span></div>
+              <div class="cfg-hint">How far ahead to project from the last data point in the tracker.</div>
+              <input type="range" id="cfg-horizon" min="6" max="60" step="1" value="37" oninput="syncCfg('horizon',this.value+' months');rerunForecast()">
+              <div class="cfg-range-ends"><span>6m</span><span>60m</span></div>
+            </div>
+          </div>
+
+          <!-- Col 2: PSOW values -->
+          <div>
+            <div class="cfg-section-head">PSOW contract values</div>
+            <div class="cfg-row">
+              <div class="cfg-label-row"><span class="cfg-name">Avg PSOW value multiplier</span><span class="cfg-val" id="lbl-val-mult">1.0×</span></div>
+              <div class="cfg-hint">Scales the avg contract value used in forecasting. 1.0x = use observed average. <span class="cfg-data-ref" id="ref-val-mult"></span></div>
+              <input type="range" id="cfg-val-mult" min="0.5" max="3" step="0.1" value="1.0" oninput="syncCfg('val-mult',parseFloat(this.value).toFixed(1)+'x');rerunForecast()">
+              <div class="cfg-range-ends"><span>0.5x</span><span>3.0x</span></div>
+            </div>
+            <div class="cfg-row">
+              <div class="cfg-label-row"><span class="cfg-name">Annual value growth</span><span class="cfg-val" id="lbl-val-growth">2%</span></div>
+              <div class="cfg-hint">Year-on-year increase in avg PSOW contract value, reflecting inflation or scope growth.</div>
+              <input type="range" id="cfg-val-growth" min="-5" max="20" step="1" value="2" oninput="syncCfg('val-growth',this.value+'%');rerunForecast()">
+              <div class="cfg-range-ends"><span>-5%</span><span>+20%</span></div>
+            </div>
+            <div id="cfg-effective-val" style="margin-top:6px;padding:10px 12px;background:var(--bg);border-radius:var(--radius);font-size:11px;color:var(--muted);border:1px solid var(--border)"></div>
+          </div>
+
+          <!-- Col 3: Additional revenue streams -->
+          <div>
+            <div class="cfg-section-head">Additional revenue streams</div>
+            <div class="cfg-row">
+              <div class="cfg-label-row"><span class="cfg-name">Baseline AMS Run (£/month)</span><span class="cfg-val" id="lbl-baseline">£0</span></div>
+              <div class="cfg-hint">Fixed monthly recurring revenue from the baseline AMS contract, independent of PSOW activity.</div>
+              <input type="range" id="cfg-baseline" min="0" max="500000" step="5000" value="0" oninput="syncCfg('baseline','£'+parseInt(this.value).toLocaleString());rerunForecast()">
+              <div class="cfg-range-ends"><span>£0</span><span>£500k</span></div>
+            </div>
+            <div class="cfg-row">
+              <div class="cfg-label-row"><span class="cfg-name">Baseline annual growth</span><span class="cfg-val" id="lbl-baseline-growth">0%</span></div>
+              <div class="cfg-hint">Year-on-year uplift applied to the baseline AMS monthly figure.</div>
+              <input type="range" id="cfg-baseline-growth" min="-10" max="20" step="1" value="0" oninput="syncCfg('baseline-growth',this.value+'%');rerunForecast()">
+              <div class="cfg-range-ends"><span>-10%</span><span>+20%</span></div>
+            </div>
+            <div class="cfg-row">
+              <div class="cfg-label-row"><span class="cfg-name">Non-weighted opps (£/month)</span><span class="cfg-val" id="lbl-opps">£0</span></div>
+              <div class="cfg-hint">Total pipeline value of new opps identified per month, before applying the conversion rate below.</div>
+              <input type="range" id="cfg-opps" min="0" max="500000" step="5000" value="0" oninput="syncCfg('opps','£'+parseInt(this.value).toLocaleString());rerunForecast()">
+              <div class="cfg-range-ends"><span>£0</span><span>£500k</span></div>
+            </div>
+            <div class="cfg-row">
+              <div class="cfg-label-row"><span class="cfg-name">Opps conversion rate</span><span class="cfg-val" id="lbl-opps-conv">30%</span></div>
+              <div class="cfg-hint">% of non-weighted opportunity value expected to convert to signed revenue.</div>
+              <input type="range" id="cfg-opps-conv" min="5" max="100" step="5" value="30" oninput="syncCfg('opps-conv',this.value+'%');rerunForecast()">
+              <div class="cfg-range-ends"><span>5%</span><span>100%</span></div>
+            </div>
+            <div id="cfg-effective-opps" style="margin-top:6px;padding:10px 12px;background:var(--bg);border-radius:var(--radius);font-size:11px;color:var(--muted);border:1px solid var(--border)"></div>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn-reload" onclick="resetForecastConfig()">&#8635; Reset to data defaults</button>
+          <span style="font-size:11px;color:var(--muted)">Revenue spread evenly across each PSOW's start to end date</span>
+        </div>
+      </div>
+
+
+      <div class="metric-grid" id="metrics-forecast"></div>
+
+      <div class="chart-card full">
+        <div class="card-title">Monthly PSOW count — actuals + forecast</div>
+        <div class="legend" id="leg-fore-monthly"></div>
+        <div style="position:relative;height:240px"><canvas id="c-fore-monthly" role="img" aria-label="Forecast monthly PSOW count chart"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <div class="card-title">Cumulative PSOWs — full timeline</div>
+        <div class="legend" id="leg-fore-cum"></div>
+        <div style="position:relative;height:260px"><canvas id="c-fore-cum" role="img" aria-label="Forecast cumulative PSOW chart"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <div class="card-title">Monthly revenue — actuals (spread) + forecast + additional streams</div>
+        <div class="legend" id="leg-fore-rev-monthly"></div>
+        <div style="position:relative;height:260px"><canvas id="c-fore-rev-monthly" role="img" aria-label="Monthly revenue forecast chart"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <div class="card-title">Cumulative revenue — actuals + forecast + additional streams</div>
+        <div class="legend" id="leg-fore-val"></div>
+        <div style="position:relative;height:280px"><canvas id="c-fore-val" role="img" aria-label="Forecast cumulative value chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ── TABLE PANEL ── -->
+    <div class="panel-section" id="panel-table">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <span style="font-size:12px;color:var(--muted);" id="table-count"></span>
+        <button class="btn-reload" onclick="exportCSV()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export filtered CSV
+        </button>
+      </div>
+      <div class="chart-card full">
+        <div class="data-table-wrap" style="max-height:600px;overflow-y:auto;">
+          <table class="data-table" id="main-table">
+            <thead id="table-head"></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /dashboard -->
+
+<script>
+/* ═══════════════════════════════════════════
+   GLOBALS
+═══════════════════════════════════════════ */
+let RAW_DATA = [];       // all parsed rows
+let FILTERED = [];       // after filters
+let CHARTS   = {};       // chart instances
+let FILE_NAME = '';
+
+const STATUS_COLORS = {
+  'Withdrawn':          '#73726c',
+  'In Delivery':        '#2563b8',
+  'With Client 1':      '#15803d',
+  'Moved to ME':        '#7c3aed',
+  'Delivery Completed': '#166534',
+  'With Our Team':      '#c2410c',
+  'Signed':             '#4d7c0f',
+  'Under ME Review':    '#b91c1c',
+};
+const DEFAULT_COLOR = '#94928c';
+
+function statusColor(s) { return STATUS_COLORS[s?.trim()] || DEFAULT_COLOR; }
+
+function statusPill(s) {
+  const map = {
+    'Withdrawn':'pill-gray','In Delivery':'pill-blue','With Client 1':'pill-green',
+    'Moved to ME':'pill-purple','Delivery Completed':'pill-green','With Our Team':'pill-amber',
+    'Signed':'pill-green','Under ME Review':'pill-red'
+  };
+  return `<span class="pill ${map[s?.trim()]||'pill-gray'}">${s||'—'}</span>`;
+}
+
+/* ═══════════════════════════════════════════
+   FILE UPLOAD
+═══════════════════════════════════════════ */
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) processFile(f);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) processFile(fileInput.files[0]); });
+
+function processFile(file) {
+  FILE_NAME = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+      const sheetName = wb.SheetNames.find(s => s.toLowerCase().includes('sow tracker') && !s.toLowerCase().includes('client')) || wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+      // Find header row (look for "SOW Reference No.")
+      let headerRow = -1;
+      for (let i = 0; i < Math.min(raw.length, 8); i++) {
+        if (raw[i] && raw[i].some(c => String(c||'').includes('SOW Reference'))) { headerRow = i; break; }
+      }
+      if (headerRow === -1) { showError('Could not find header row with "SOW Reference No." — please check the file.'); return; }
+
+      const headers = raw[headerRow].map(h => String(h||'').trim());
+      const rows = raw.slice(headerRow + 1).filter(r => r && r[0]);
+
+      RAW_DATA = rows.map(r => {
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = r[i] ?? null);
+        return obj;
+      }).map(parseRow);
+
+      document.getElementById('upload-error').style.display = 'none';
+      buildDashboard();
+    } catch(err) {
+      showError('Error reading file: ' + err.message);
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function showError(msg) {
+  const el = document.getElementById('upload-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+function parseRow(r) {
+  const findCol = (...keys) => {
+    for (const k of keys) {
+      const found = Object.keys(r).find(c => c.toLowerCase().includes(k.toLowerCase()));
+      if (found) return r[found];
+    }
+    return null;
+  };
+
+  const parseDate = v => {
+    if (!v) return null;
+    if (v instanceof Date) return isNaN(v) ? null : v;
+    if (typeof v === 'number') {
+      const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+      return isNaN(d) ? null : d;
+    }
+    // Try first date pattern
+    const m = String(v).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (m) {
+      const d = new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`);
+      return isNaN(d) ? null : d;
+    }
+    const d = new Date(v);
+    return isNaN(d) ? null : d;
+  };
+
+  const parseVal = v => {
+    if (!v || v === 'No Value') return 0;
+    if (typeof v === 'number') return v;
+    const m = String(v).replace(/[£,]/g,'').match(/[\d]+\.?[\d]*/);
+    return m ? parseFloat(m[0]) : 0;
+  };
+
+  const ref      = String(findCol('SOW Reference') || '').replace(/[\u200b\u200c\u200d]/g,'').trim();
+  const status   = String(findCol('Overall Status') || '').trim();
+  const received = parseDate(findCol('Received from Client', 'Received from Defra', 'Initial PSOW Received'));
+  const sowStart = parseDate(findCol('Start Date', 'SOW Start'));
+  const val      = parseVal(findCol('Value', 'Current Price'));
+  const owner    = String(findCol('Our Team', 'Accenture  Owner', 'Our Team  Owner') || '').trim();
+  const category = String(findCol('Category') || '').trim();
+  const risk     = String(findCol('Working At risk') || '').trim();
+  const subStage = String(findCol('SUB PSOW', 'Status') || '').trim();
+  const title    = String(findCol('SOW Title') || '').trim();
+  const submTarget = parseDate(findCol('Target Submission'));
+
+  // Validate date (filter corrupt dates before 2020)
+  const validDate = d => d && d.getFullYear() >= 2020 ? d : null;
+
+  const group = (() => {
+    const s = status.toLowerCase();
+    if (s.includes('delivery completed') || s.includes('in delivery') || s.includes('moved to me') || s.includes('signed')) return 'progressed';
+    if (s.includes('withdrawn')) return 'withdrawn';
+    if (s.includes('with our team') || s.includes('with accenture')) return 'with_our_team';
+    if (s.includes('with client') || s.includes('with defra')) return 'with_client';
+    return 'other';
+  })();
+
+  const turnaround = (() => {
+    const rd = validDate(received), sd = validDate(submTarget);
+    if (!rd || !sd) return null;
+    const d = Math.round((sd - rd) / 86400000);
+    return d >= 0 ? d : null;
+  })();
+
+  const sowEnd   = validDate(parseDate(findCol('End Date', 'SOW End')));
+
+  return { ref, title, status, received: validDate(received), sowStart: validDate(sowStart), sowEnd, val, owner, category, risk, subStage, group, turnaround };
+}
+
+function toYearMonth(d) {
+  if (!d || !(d instanceof Date) || isNaN(d)) return null;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function fmtMonth(ym) {
+  if (!ym) return '';
+  const [y, m] = ym.split('-');
+  const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1];
+  return `${mon} ${y.slice(2)}`;
+}
+
+function fmtVal(v) {
+  if (v >= 1000000) return '£' + (v/1000000).toFixed(2) + 'M';
+  if (v >= 1000)    return '£' + (v/1000).toFixed(0) + 'k';
+  return '£' + Math.round(v).toLocaleString();
+}
+
+/* ═══════════════════════════════════════════
+   FILTERS
+═══════════════════════════════════════════ */
+function populateFilters() {
+  const statuses   = [...new Set(RAW_DATA.map(r => r.status).filter(Boolean).map(s => s.trim()))].sort();
+  const categories = [...new Set(RAW_DATA.map(r => r.category).filter(Boolean))].sort();
+  const owners     = [...new Set(RAW_DATA.map(r => r.owner).filter(Boolean))].sort();
+  const risks      = [...new Set(RAW_DATA.map(r => r.risk).filter(Boolean))].sort();
+
+  const fill = (id, vals) => {
+    const el = document.getElementById(id);
+    const cur = el.value;
+    while (el.options.length > 1) el.remove(1);
+    vals.forEach(v => { const o = new Option(v, v); el.add(o); });
+    if (vals.includes(cur)) el.value = cur;
+  };
+
+  fill('f-status', statuses);
+  fill('f-category', categories);
+  fill('f-owner', owners);
+  fill('f-risk', risks);
+}
+
+function applyFilters() {
+  const fs = document.getElementById('f-status').value;
+  const fc = document.getElementById('f-category').value;
+  const fo = document.getElementById('f-owner').value;
+  const fr = document.getElementById('f-risk').value;
+
+  FILTERED = RAW_DATA.filter(r =>
+    (!fs || r.status.trim() === fs) &&
+    (!fc || r.category === fc) &&
+    (!fo || r.owner === fo) &&
+    (!fr || r.risk === fr)
+  );
+
+  const total = RAW_DATA.length, filtered = FILTERED.length;
+  document.getElementById('filter-count').textContent =
+    (fs||fc||fo||fr) ? `Showing ${filtered} of ${total} records` : `${total} records`;
+
+  renderAll();
+}
+
+function clearFilters() {
+  ['f-status','f-category','f-owner','f-risk'].forEach(id => document.getElementById(id).value = '');
+  applyFilters();
+}
+
+/* ═══════════════════════════════════════════
+   CHART HELPERS
+═══════════════════════════════════════════ */
+function destroyChart(id) {
+  if (CHARTS[id]) { CHARTS[id].destroy(); delete CHARTS[id]; }
+}
+
+function makeLegend(containerId, items, chartId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '';
+  items.forEach((item, i) => {
+    const div = document.createElement('div');
+    div.className = 'legend-item';
+    div.dataset.idx = i;
+    div.innerHTML = `<span class="legend-dot" style="background:${item.color}"></span>${item.label}`;
+    div.onclick = () => {
+      const chart = CHARTS[chartId];
+      if (!chart) return;
+      const meta = chart.getDatasetMeta(i);
+      meta.hidden = !meta.hidden;
+      chart.update();
+      div.classList.toggle('hidden', meta.hidden);
+    };
+    el.appendChild(div);
+  });
+}
+
+function monthRange(data, dateKey) {
+  const dates = data.map(r => r[dateKey]).filter(d => d instanceof Date && !isNaN(d));
+  if (!dates.length) return [];
+  const timestamps = dates.map(d => d.getTime());
+  const min = new Date(Math.min(...timestamps));
+  const max = new Date(Math.max(...timestamps));
+  const months = [];
+  const cur = new Date(min.getFullYear(), min.getMonth(), 1);
+  const end = new Date(max.getFullYear(), max.getMonth(), 1);
+  while (cur <= end) {
+    months.push(toYearMonth(cur));
+    cur.setMonth(cur.getMonth() + 1);
+  }
+  return months;
+}
+
+function groupByMonth(data, dateKey, valKey=null) {
+  const map = {};
+  data.forEach(r => {
+    const d = r[dateKey];
+    if (!(d instanceof Date) || isNaN(d)) return;
+    const ym = toYearMonth(d);
+    if (!ym) return;
+    map[ym] = (map[ym] || 0) + (valKey ? (r[valKey]||0) : 1);
+  });
+  return map;
+}
+
+function cumArr(arr, start=0) {
+  let t = start; return arr.map(v => (t += (v||0), t));
+}
+
+/* ═══════════════════════════════════════════
+   BUILD DASHBOARD
+═══════════════════════════════════════════ */
+function buildDashboard() {
+  FILTERED = [...RAW_DATA];
+  populateFilters();
+  document.getElementById('file-badge').textContent = FILE_NAME;
+  document.getElementById('record-badge').textContent = `${RAW_DATA.length} records`;
+  document.getElementById('upload-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('filter-count').textContent = `${RAW_DATA.length} records`;
+  populateCfgContext(RAW_DATA);
+  renderAll();
+}
+
+function renderAll() {
+  const d = FILTERED;
+  renderStatus(d);
+  renderOwners(d);
+  renderTrend(d);
+  renderValue(d);
+  renderForecast(d);
+  renderTable(d);
+}
+
+/* ═══════════════════════════════════════════
+   STATUS PANEL
+═══════════════════════════════════════════ */
+function renderStatus(d) {
+  const total = d.length;
+  const statusCounts = {};
+  d.forEach(r => { const s = r.status.trim(); statusCounts[s] = (statusCounts[s]||0)+1; });
+
+  const inDelivery = (statusCounts['In Delivery']||0);
+  const withClient = (statusCounts['With Client 1']||0);
+  const withTeam   = (statusCounts['With Our Team']||0);
+  const completed  = (statusCounts['Delivery Completed']||0);
+  const withdrawn  = (statusCounts['Withdrawn']||0);
+
+  document.getElementById('metrics-status').innerHTML = `
+    <div class="metric-card"><div class="m-label">Total PSOWs</div><div class="m-value">${total}</div><div class="m-sub">unique records</div></div>
+    <div class="metric-card"><div class="m-label">In Delivery</div><div class="m-value" style="color:var(--blue)">${inDelivery}</div><div class="m-sub">${pct(inDelivery,total)}% of total</div></div>
+    <div class="metric-card"><div class="m-label">Active gap</div><div class="m-value" style="color:var(--amber)">${withClient+withTeam}</div><div class="m-sub">${withTeam} our team · ${withClient} with client</div></div>
+    <div class="metric-card"><div class="m-label">Delivery completed</div><div class="m-value" style="color:var(--green)">${completed}</div><div class="m-sub">${pct(completed,total)}% of total</div></div>
+    <div class="metric-card"><div class="m-label">Withdrawn</div><div class="m-value" style="color:var(--red)">${withdrawn}</div><div class="m-sub">${pct(withdrawn,total)}% of total</div></div>
+  `;
+
+  // Doughnut
+  const sorted = Object.entries(statusCounts).sort((a,b) => b[1]-a[1]);
+  const labels  = sorted.map(([s]) => s);
+  const counts  = sorted.map(([,c]) => c);
+  const colors  = labels.map(statusColor);
+
+  destroyChart('donut');
+  CHARTS['donut'] = new Chart(document.getElementById('c-donut'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: counts, backgroundColor: colors, borderWidth: 2, hoverOffset: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '55%',
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw} — ${pct(ctx.raw,total)}%` } } }
+    }
+  });
+
+  const legendEl = document.getElementById('donut-legend');
+  legendEl.innerHTML = sorted.map(([s,c]) =>
+    `<div class="donut-row"><div class="donut-row-left"><span class="legend-dot" style="background:${statusColor(s)}"></span>${s}</div><div class="donut-row-right"><span class="donut-count">${c}</span><span class="donut-pct">${pct(c,total)}%</span></div></div>`
+  ).join('');
+
+  // Stage bars
+  const stageBarsEl = document.getElementById('stage-bars');
+  const maxC = Math.max(...counts, 1);
+  stageBarsEl.innerHTML = sorted.map(([s,c]) =>
+    `<div class="stage-row"><span class="stage-label">${s}</span><div class="stage-track"><div class="stage-bar" style="width:${Math.round(c/maxC*100)}%;background:${statusColor(s)}"><span>${c} &nbsp;${pct(c,total)}%</span></div></div></div>`
+  ).join('');
+
+  // Category chart
+  const catCounts = {};
+  d.forEach(r => { if(r.category) catCounts[r.category] = (catCounts[r.category]||0)+1; });
+  const catSorted = Object.entries(catCounts).sort((a,b) => b[1]-a[1]);
+
+  destroyChart('category');
+  CHARTS['category'] = new Chart(document.getElementById('c-category'), {
+    type: 'bar', indexAxis: 'y',
+    data: { labels: catSorted.map(([c])=>c), datasets: [{ data: catSorted.map(([,n])=>n), backgroundColor: '#2563b8', borderRadius: 3, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw} PSOWs` } } },
+      scales: { x: { ticks:{font:{size:11}}, grid:{color:'rgba(0,0,0,0.05)'} }, y: { ticks:{font:{size:11}} } }
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════
+   OWNERS PANEL
+═══════════════════════════════════════════ */
+function renderOwners(d) {
+  const knownVal = d.filter(r=>r.val>0).reduce((s,r)=>s+r.val,0);
+  const inDelVal = d.filter(r=>r.group==='progressed'&&r.val>0).reduce((s,r)=>s+r.val,0);
+
+  document.getElementById('metrics-owners').innerHTML = `
+    <div class="metric-card"><div class="m-label">Known total value</div><div class="m-value">${fmtVal(knownVal)}</div><div class="m-sub">${d.filter(r=>r.val>0).length} PSOWs with values</div></div>
+    <div class="metric-card"><div class="m-label">Progressed value</div><div class="m-value" style="color:var(--green)">${fmtVal(inDelVal)}</div><div class="m-sub">${pct(inDelVal,knownVal)}% of known total</div></div>
+    <div class="metric-card"><div class="m-label">Withdrawn value</div><div class="m-value" style="color:var(--red)">${fmtVal(d.filter(r=>r.group==='withdrawn').reduce((s,r)=>s+r.val,0))}</div><div class="m-sub">value not progressed</div></div>
+    <div class="metric-card"><div class="m-label">Active gap value</div><div class="m-value" style="color:var(--amber)">${fmtVal(d.filter(r=>r.group==='with_our_team'||r.group==='with_client').reduce((s,r)=>s+r.val,0))}</div><div class="m-sub">pending signature</div></div>
+  `;
+
+  // Owner stacked
+  const ownerMap = {};
+  d.forEach(r => {
+    const o = r.owner||'Unassigned';
+    if (!ownerMap[o]) ownerMap[o] = {};
+    ownerMap[o][r.status.trim()] = (ownerMap[o][r.status.trim()]||0)+1;
+  });
+  const topOwners = Object.entries(ownerMap).sort((a,b) => Object.values(b[1]).reduce((s,v)=>s+v,0) - Object.values(a[1]).reduce((s,v)=>s+v,0)).slice(0,12);
+  const stackStatuses = ['In Delivery','With Client 1','With Our Team','Delivery Completed','Moved to ME','Withdrawn'];
+  const stackColors2  = ['#2563b8','#15803d','#c2410c','#166534','#7c3aed','#73726c'];
+
+  destroyChart('owner-stack');
+  CHARTS['owner-stack'] = new Chart(document.getElementById('c-owner-stack'), {
+    type: 'bar',
+    data: {
+      labels: topOwners.map(([o])=>o),
+      datasets: stackStatuses.map((s,i) => ({
+        label: s, stack: 'a',
+        data: topOwners.map(([,m]) => m[s]||0),
+        backgroundColor: stackColors2[i], borderRadius: 2, borderSkipped: false
+      }))
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+      scales: { x: { stacked: true, ticks:{font:{size:10}} }, y: { stacked: true, ticks:{font:{size:11}}, grid:{color:'rgba(0,0,0,0.05)'} } }
+    }
+  });
+
+  // Owner value
+  const ownerVal = {};
+  d.filter(r=>r.val>0).forEach(r => { const o=r.owner||'Unassigned'; ownerVal[o]=(ownerVal[o]||0)+r.val; });
+  const topOwnerVal = Object.entries(ownerVal).sort((a,b)=>b[1]-a[1]).slice(0,12);
+
+  destroyChart('owner-value');
+  CHARTS['owner-value'] = new Chart(document.getElementById('c-owner-value'), {
+    type: 'bar',
+    data: { labels: topOwnerVal.map(([o])=>o), datasets: [{ data: topOwnerVal.map(([,v])=>v), backgroundColor: '#2563b8', borderRadius: 3, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false}, tooltip:{callbacks:{label:ctx=>' '+fmtVal(ctx.raw)}} },
+      scales: { x:{ticks:{font:{size:10}}}, y:{ticks:{font:{size:11},callback:v=>fmtVal(v)},grid:{color:'rgba(0,0,0,0.05)'}} }
+    }
+  });
+
+  // Value by status
+  const statusVal = {};
+  d.filter(r=>r.val>0).forEach(r => { const s=r.status.trim(); statusVal[s]=(statusVal[s]||0)+r.val; });
+  const svSorted = Object.entries(statusVal).sort((a,b)=>b[1]-a[1]);
+
+  destroyChart('value-status');
+  CHARTS['value-status'] = new Chart(document.getElementById('c-value-status'), {
+    type: 'bar', indexAxis: 'y',
+    data: { labels: svSorted.map(([s])=>s), datasets: [{ data: svSorted.map(([,v])=>v), backgroundColor: svSorted.map(([s])=>statusColor(s)), borderRadius:3, borderSkipped:false }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false}, tooltip:{callbacks:{label:ctx=>' '+fmtVal(ctx.raw)}} },
+      scales: { x:{ticks:{font:{size:11},callback:v=>fmtVal(v)},grid:{color:'rgba(0,0,0,0.05)'}}, y:{ticks:{font:{size:11}}} }
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════
+   TREND PANEL
+═══════════════════════════════════════════ */
+function renderTrend(d) {
+  const withReceived = d.filter(r => r.received);
+  const months = monthRange(withReceived, 'received');
+
+  const byGroup = grp => {
+    const map = groupByMonth(d.filter(r => !grp || r.group===grp), 'received');
+    return months.map(m => map[m]||0);
+  };
+
+  const recvArr   = byGroup(null);
+  const submArr   = byGroup('progressed');
+  const withdArr  = byGroup('withdrawn');
+  const wotArr    = byGroup('with_our_team');
+  const wcArr     = byGroup('with_client');
+  const labels    = months.map(fmtMonth);
+
+  document.getElementById('metrics-trend').innerHTML = `
+    <div class="metric-card"><div class="m-label">PSOWs received</div><div class="m-value">${withReceived.length}</div><div class="m-sub">${months[0] ? fmtMonth(months[0]) : ''} – ${months.length ? fmtMonth(months[months.length-1]) : ''}</div></div>
+    <div class="metric-card"><div class="m-label">Progressed</div><div class="m-value">${d.filter(r=>r.group==='progressed').length}</div><div class="m-sub">${pct(d.filter(r=>r.group==='progressed').length, withReceived.length)}% progression rate</div></div>
+    <div class="metric-card"><div class="m-label">Avg turnaround</div><div class="m-value">${avgTurnaround(d)} days</div><div class="m-sub">receipt to submission</div></div>
+    <div class="metric-card"><div class="m-label">Active gap</div><div class="m-value" style="color:var(--amber)">${d.filter(r=>r.group==='with_our_team'||r.group==='with_client').length}</div><div class="m-sub">with our team or client</div></div>
+  `;
+
+  const trendDatasets = [
+    { label: 'Received', data: recvArr, borderColor: '#2563b8', backgroundColor: 'rgba(37,99,184,0.07)', fill: true, tension: 0.35, pointRadius: 3, pointBackgroundColor: '#2563b8', borderWidth: 2 },
+    { label: 'Progressed', data: submArr, borderColor: '#15803d', backgroundColor: 'rgba(21,128,61,0.07)', fill: true, tension: 0.35, pointRadius: 3, pointBackgroundColor: '#15803d', borderWidth: 2, borderDash:[5,3] },
+    { label: 'Withdrawn', data: withdArr, borderColor: '#b91c1c', backgroundColor: 'rgba(185,28,28,0.05)', fill: true, tension: 0.35, pointRadius: 3, pointBackgroundColor: '#b91c1c', borderWidth: 2, borderDash:[2,4] },
+  ];
+
+  makeLegend('leg-trend', trendDatasets.map(ds=>({label:ds.label,color:ds.borderColor})), 'trend-monthly');
+  destroyChart('trend-monthly');
+  CHARTS['trend-monthly'] = new Chart(document.getElementById('c-trend-monthly'), {
+    type: 'line', data: { labels, datasets: trendDatasets },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}},
+      scales:{x:{ticks:{font:{size:11},autoSkip:true,maxTicksLimit:12},grid:{color:'rgba(0,0,0,0.05)'}},y:{beginAtZero:true,ticks:{font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}}}
+    }
+  });
+
+  // Turnaround
+  const statusTA = {};
+  d.filter(r=>r.turnaround!==null).forEach(r => {
+    const s = r.status.trim();
+    if(!statusTA[s]) statusTA[s]=[];
+    statusTA[s].push(r.turnaround);
+  });
+  const taSorted = Object.entries(statusTA).map(([s,vals])=>([s, Math.round(vals.reduce((a,v)=>a+v,0)/vals.length)])).sort((a,b)=>a[1]-b[1]);
+
+  destroyChart('turnaround');
+  CHARTS['turnaround'] = new Chart(document.getElementById('c-turnaround'), {
+    type:'bar', indexAxis:'y',
+    data:{ labels:taSorted.map(([s])=>s), datasets:[{data:taSorted.map(([,v])=>v), backgroundColor:taSorted.map(([s])=>statusColor(s)), borderRadius:3, borderSkipped:false}] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${Math.round(ctx.raw)} days avg`}}},
+      scales:{x:{ticks:{font:{size:11},callback:v=>v+'d'},grid:{color:'rgba(0,0,0,0.05)'}},y:{ticks:{font:{size:11}}}}
+    }
+  });
+
+  // Active gap cumulative
+  const gapDatasets = [
+    { label: 'With Our Team', data: cumArr(wotArr), borderColor: '#c2410c', backgroundColor:'transparent', fill:false, tension:0.3, pointRadius:3, pointBackgroundColor:'#c2410c', borderWidth:1.5, borderDash:[4,3] },
+    { label: 'With Client 1', data: cumArr(wcArr),  borderColor: '#7c3aed', backgroundColor:'transparent', fill:false, tension:0.3, pointRadius:3, pointBackgroundColor:'#7c3aed', borderWidth:1.5, borderDash:[4,3] },
+  ];
+  makeLegend('leg-gap', gapDatasets.map(ds=>({label:ds.label,color:ds.borderColor})), 'gap');
+  destroyChart('gap');
+  CHARTS['gap'] = new Chart(document.getElementById('c-gap'), {
+    type:'line', data:{labels, datasets:gapDatasets},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}},
+      scales:{x:{ticks:{font:{size:11},autoSkip:true,maxTicksLimit:12}},y:{beginAtZero:true,ticks:{font:{size:11}}}}
+    }
+  });
+
+  // Cumulative
+  const cumDatasets = [
+    { label:'Received',    data:cumArr(recvArr),  borderColor:'#2563b8', backgroundColor:'rgba(37,99,184,0.08)', fill:true, tension:0.3, pointRadius:3, pointBackgroundColor:'#2563b8', borderWidth:2 },
+    { label:'Progressed',  data:cumArr(submArr),  borderColor:'#15803d', backgroundColor:'rgba(21,128,61,0.08)',  fill:true, tension:0.3, pointRadius:3, pointBackgroundColor:'#15803d', borderWidth:2, borderDash:[5,3] },
+    { label:'Withdrawn',   data:cumArr(withdArr), borderColor:'#b91c1c', backgroundColor:'transparent', fill:false, tension:0.3, pointRadius:3, pointBackgroundColor:'#b91c1c', borderWidth:2, borderDash:[2,4] },
+    { label:'With Our Team',data:cumArr(wotArr),  borderColor:'#c2410c', backgroundColor:'transparent', fill:false, tension:0.3, pointRadius:3, pointBackgroundColor:'#c2410c', borderWidth:1.5, borderDash:[4,3] },
+    { label:'With Client 1',data:cumArr(wcArr),   borderColor:'#7c3aed', backgroundColor:'transparent', fill:false, tension:0.3, pointRadius:3, pointBackgroundColor:'#7c3aed', borderWidth:1.5, borderDash:[4,3] },
+  ];
+  makeLegend('leg-cum', cumDatasets.map(ds=>({label:ds.label,color:ds.borderColor})), 'cumulative');
+  destroyChart('cumulative');
+  CHARTS['cumulative'] = new Chart(document.getElementById('c-cumulative'), {
+    type:'line', data:{labels, datasets:cumDatasets},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}},
+      scales:{x:{ticks:{font:{size:11},autoSkip:true,maxTicksLimit:12},grid:{color:'rgba(0,0,0,0.05)'}},y:{beginAtZero:true,ticks:{font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}}}
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════
+   VALUE PANEL
+═══════════════════════════════════════════ */
+function renderValue(d) {
+  const withBoth = d.filter(r => r.sowStart instanceof Date && !isNaN(r.sowStart) && r.val > 0);
+  const totalVal = withBoth.reduce((s,r)=>s+r.val,0);
+  const progVal  = withBoth.filter(r=>r.group==='progressed').reduce((s,r)=>s+r.val,0);
+  const withdVal = withBoth.filter(r=>r.group==='withdrawn').reduce((s,r)=>s+r.val,0);
+  const gapVal   = withBoth.filter(r=>r.group==='with_our_team'||r.group==='with_client').reduce((s,r)=>s+r.val,0);
+
+  document.getElementById('metrics-value').innerHTML = `
+    <div class="metric-card"><div class="m-label">Known value (by SOW start)</div><div class="m-value">${fmtVal(totalVal)}</div><div class="m-sub">${withBoth.length} PSOWs with start + value</div></div>
+    <div class="metric-card"><div class="m-label">Value progressed</div><div class="m-value" style="color:var(--green)">${fmtVal(progVal)}</div><div class="m-sub">${pct(progVal,totalVal)}% of known value</div></div>
+    <div class="metric-card"><div class="m-label">Value withdrawn</div><div class="m-value" style="color:var(--red)">${fmtVal(withdVal)}</div><div class="m-sub">${pct(withdVal,totalVal)}% of known value</div></div>
+    <div class="metric-card"><div class="m-label">Active gap value</div><div class="m-value" style="color:var(--amber)">${fmtVal(gapVal)}</div><div class="m-sub">pending progression</div></div>
+  `;
+
+  const months = monthRange(withBoth, 'sowStart');
+  const labels = months.map(fmtMonth);
+
+  const valByGroup = grp => {
+    const subset = grp ? withBoth.filter(r=>r.group===grp) : withBoth;
+    const map = groupByMonth(subset, 'sowStart', 'val');
+    return months.map(m => map[m]||0);
+  };
+
+  const allVal    = valByGroup(null);
+  const progArrV  = valByGroup('progressed');
+  const withdArrV = valByGroup('withdrawn');
+  const gapArrV   = withBoth.filter(r=>r.group==='with_our_team'||r.group==='with_client');
+  const gapMapV   = groupByMonth(gapArrV, 'sowStart','val');
+  const gapValArr = months.map(m=>gapMapV[m]||0);
+
+  destroyChart('val-monthly');
+  CHARTS['val-monthly'] = new Chart(document.getElementById('c-val-monthly'), {
+    type:'bar',
+    data:{ labels, datasets:[
+      { label:'Total received',  data:allVal.map(Math.round),    backgroundColor:'rgba(37,99,184,0.7)',  borderRadius:2 },
+      { label:'Progressed',      data:progArrV.map(Math.round),  backgroundColor:'rgba(21,128,61,0.7)',  borderRadius:2 },
+      { label:'Withdrawn',       data:withdArrV.map(Math.round), backgroundColor:'rgba(185,28,28,0.7)', borderRadius:2 },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmtVal(ctx.raw)}`}}},
+      scales:{x:{ticks:{font:{size:11},autoSkip:true,maxTicksLimit:12}},y:{beginAtZero:true,ticks:{font:{size:11},callback:v=>fmtVal(v)},grid:{color:'rgba(0,0,0,0.05)'}}}
+    }
+  });
+
+  const cumValDatasets = [
+    { label:'Total received',  data:cumArr(allVal).map(Math.round),    borderColor:'#2563b8', backgroundColor:'rgba(37,99,184,0.07)', fill:true,  tension:0.3, pointRadius:3, pointBackgroundColor:'#2563b8', borderWidth:2.5 },
+    { label:'Progressed',      data:cumArr(progArrV).map(Math.round),  borderColor:'#15803d', backgroundColor:'rgba(21,128,61,0.07)',  fill:true,  tension:0.3, pointRadius:3, pointBackgroundColor:'#15803d', borderWidth:2.5 },
+    { label:'Withdrawn',       data:cumArr(withdArrV).map(Math.round), borderColor:'#b91c1c', backgroundColor:'transparent', fill:false, tension:0.3, pointRadius:3, pointBackgroundColor:'#b91c1c', borderWidth:2 },
+    { label:'Active gap',      data:cumArr(gapValArr).map(Math.round), borderColor:'#c2410c', backgroundColor:'transparent', fill:false, tension:0.3, pointRadius:3, pointBackgroundColor:'#c2410c', borderWidth:1.5, borderDash:[4,3] },
+  ];
+  makeLegend('leg-val-cum', cumValDatasets.map(ds=>({label:ds.label,color:ds.borderColor})), 'val-cum');
+  destroyChart('val-cum');
+  CHARTS['val-cum'] = new Chart(document.getElementById('c-val-cum'), {
+    type:'line', data:{labels, datasets:cumValDatasets},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmtVal(ctx.raw)}`}}},
+      scales:{x:{ticks:{font:{size:11},autoSkip:true,maxTicksLimit:12}},y:{beginAtZero:true,ticks:{font:{size:11},callback:v=>fmtVal(v)},grid:{color:'rgba(0,0,0,0.05)'}}}
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════
+   FORECAST CONFIG HELPERS
+═══════════════════════════════════════════ */
+let FORECAST_DATA = null;
+
+function syncCfg(id, display) {
+  document.getElementById('lbl-'+id).textContent = display;
+  updateEffectiveCallouts();
+}
+
+function getCfg() {
+  return {
+    progRate:       parseInt(document.getElementById('cfg-prog-rate').value) / 100,
+    withdRate:      parseInt(document.getElementById('cfg-withd-rate').value) / 100,
+    growth:         parseInt(document.getElementById('cfg-growth').value) / 100,
+    taImprove:      parseInt(document.getElementById('cfg-ta-improve').value) / 100,
+    valMult:        parseFloat(document.getElementById('cfg-val-mult').value),
+    valGrowth:      parseInt(document.getElementById('cfg-val-growth').value) / 100,
+    horizon:        parseInt(document.getElementById('cfg-horizon').value),
+    baseline:       parseInt(document.getElementById('cfg-baseline').value),
+    baselineGrowth: parseInt(document.getElementById('cfg-baseline-growth').value) / 100,
+    opps:           parseInt(document.getElementById('cfg-opps').value),
+    oppsConv:       parseInt(document.getElementById('cfg-opps-conv').value) / 100,
+  };
+}
+
+function populateCfgContext(d) {
+  // Compute all data-driven stats once when data loads and populate labels + context bar
+  const withRecv  = d.filter(r => r.received);
+  const total     = withRecv.length || 1;
+  const progRate  = Math.round(d.filter(r => r.group === 'progressed').length / total * 100);
+  const withdRate = Math.round(d.filter(r => r.group === 'withdrawn').length  / total * 100);
+
+  // Monthly intake avg
+  const mMap = {}; withRecv.forEach(r => { const m = toYearMonth(r.received); mMap[m] = (mMap[m]||0)+1; });
+  const mVals = Object.values(mMap);
+  const avgMonthly = mVals.length ? (mVals.reduce((s,v)=>s+v,0)/mVals.length).toFixed(1) : '—';
+  const peakMonth  = mVals.length ? Math.max(...mVals) : '—';
+
+  // Turnaround
+  const taVals = d.filter(r => r.turnaround !== null).map(r => r.turnaround);
+  const avgTA  = taVals.length ? Math.round(taVals.reduce((s,v)=>s+v,0)/taVals.length) : null;
+  const yr1TA  = avgTA ? Math.round(avgTA * 0.9) : null;
+  const yr2TA  = avgTA ? Math.round(avgTA * 0.81) : null;
+
+  // Values
+  const withBoth  = d.filter(r => r.sowStart && r.sowEnd && r.val > 0);
+  const avgVal    = withBoth.length ? Math.round(withBoth.reduce((s,r)=>s+r.val,0)/withBoth.length) : 0;
+  const medVal    = withBoth.length ? Math.round([...withBoth].sort((a,b)=>a.val-b.val)[Math.floor(withBoth.length/2)].val) : 0;
+  const coverage  = withBoth.length ? Math.round(withBoth.length/d.length*100) : 0;
+  const withBoth2 = withBoth.filter(r => r.sowEnd > r.sowStart);
+  const avgDur    = withBoth2.length ? (withBoth2.reduce((s,r)=>s+((r.sowEnd-r.sowStart)/(30.44*86400000)),0)/withBoth2.length).toFixed(1) : '—';
+
+  // Set data-ref spans
+  const setRef = (id, txt) => { const el = document.getElementById(id); if(el) el.textContent = txt; };
+  setRef('ref-prog-rate',  `From your data: ${progRate}% of ${total} PSOWs progressed`);
+  setRef('ref-withd-rate', `From your data: ${withdRate}% of ${total} PSOWs withdrawn`);
+  setRef('ref-growth',     `Your data avg: ${avgMonthly} PSOWs/month · peak month: ${peakMonth}`);
+  setRef('ref-ta-improve', avgTA ? `Current avg: ${avgTA} days · with 10%: Yr1=${yr1TA}d, Yr2=${yr2TA}d` : 'No turnaround data');
+  setRef('ref-val-mult',   avgVal ? `Observed avg: £${avgVal.toLocaleString()} · median: £${medVal.toLocaleString()} · ${coverage}% of PSOWs have values` : 'No value data');
+
+  // Set slider defaults from data
+  document.getElementById('cfg-prog-rate').value  = progRate;
+  document.getElementById('lbl-prog-rate').textContent = progRate + '%';
+  document.getElementById('cfg-withd-rate').value = withdRate;
+  document.getElementById('lbl-withd-rate').textContent = withdRate + '%';
+
+  // Context bar chips
+  const chips = [
+    { label: 'Avg intake', val: avgMonthly + ' PSOWs/mo' },
+    { label: 'Progression', val: progRate + '%' },
+    { label: 'Withdrawal', val: withdRate + '%' },
+    { label: 'Avg turnaround', val: avgTA ? avgTA + ' days' : 'N/A' },
+    { label: 'Avg PSOW value', val: avgVal ? '£' + avgVal.toLocaleString() : 'N/A' },
+    { label: 'Value coverage', val: coverage + '%' },
+    { label: 'Avg contract duration', val: avgDur + ' months' },
+    { label: 'Total PSOWs', val: d.length + ' records' },
+  ];
+  const bar = document.getElementById('cfg-context-bar');
+  if (bar) bar.innerHTML = '<span style="font-size:11px;font-weight:600;color:var(--muted);margin-right:4px">From your data:</span>' +
+    chips.map(c => `<span class="cfg-chip"><span class="cfg-chip-label">${c.label}</span><span class="cfg-chip-val">${c.val}</span></span>`).join('');
+
+  // Store for live callouts
+  window._cfgStats = { avgVal, medVal, coverage, avgDur, avgMonthly, avgTA };
+  updateEffectiveCallouts();
+}
+
+function updateEffectiveCallouts() {
+  const s = window._cfgStats;
+  if (!s) return;
+  const cfg = getCfg();
+  const effVal = Math.round(s.avgVal * cfg.valMult);
+  const effOpps = Math.round(cfg.opps * cfg.oppsConv);
+  const evEl = document.getElementById('cfg-effective-val');
+  if (evEl) evEl.innerHTML = `
+    <b>At ${parseFloat(cfg.valMult).toFixed(1)}x multiplier:</b> effective avg = <b>£${effVal.toLocaleString()}</b>
+    &nbsp;·&nbsp; observed avg = £${s.avgVal.toLocaleString()}
+    &nbsp;·&nbsp; median = £${s.medVal.toLocaleString()}
+    &nbsp;·&nbsp; avg contract duration = ${s.avgDur} months`;
+  const eoEl = document.getElementById('cfg-effective-opps');
+  if (eoEl) eoEl.innerHTML = cfg.opps > 0
+    ? `At ${Math.round(cfg.oppsConv*100)}% conversion: <b>£${effOpps.toLocaleString()}/month</b> expected revenue from opps pipeline`
+    : 'Set a monthly opps pipeline value above to see the expected converted revenue.';
+}
+
+function resetForecastConfig() {
+  if (FORECAST_DATA) {
+    populateCfgContext(FORECAST_DATA);
+  }
+  // Reset non-data-driven sliders to defaults
+  const defaults = { 'cfg-growth':2, 'cfg-ta-improve':10, 'cfg-val-mult':1.0, 'cfg-val-growth':2, 'cfg-horizon':37, 'cfg-baseline':0, 'cfg-baseline-growth':0, 'cfg-opps':0, 'cfg-opps-conv':30 };
+  const labels   = { 'cfg-growth':'2%', 'cfg-ta-improve':'10%', 'cfg-val-mult':'1.0x', 'cfg-val-growth':'2%', 'cfg-horizon':'37 months', 'cfg-baseline':'£0', 'cfg-baseline-growth':'0%', 'cfg-opps':'£0', 'cfg-opps-conv':'30%' };
+  Object.entries(defaults).forEach(([id,v]) => { document.getElementById(id).value = v; });
+  Object.entries(labels).forEach(([id,v])  => { const lbl = document.getElementById('lbl-'+id.replace('cfg-','')); if(lbl) lbl.textContent = v; });
+  if(FORECAST_DATA) renderForecast(FORECAST_DATA);
+}
+
+function rerunForecast() {
+  if(FORECAST_DATA) renderForecast(FORECAST_DATA);
+}
+
+/* ═══════════════════════════════════════════
+   REVENUE SPREADING
+   Spreads a PSOW's value evenly across every
+   calendar month between sowStart and sowEnd.
+   Returns a map of { 'YYYY-MM': £amount }
+═══════════════════════════════════════════ */
+function buildSpreadRevMap(rows) {
+  const map = {};
+  rows.forEach(r => {
+    if (!r.sowStart || !r.sowEnd || r.val <= 0) return;
+    const start = new Date(r.sowStart.getFullYear(), r.sowStart.getMonth(), 1);
+    const end   = new Date(r.sowEnd.getFullYear(),   r.sowEnd.getMonth(),   1);
+    if (end < start) return;
+    // Count months in range
+    const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+    const monthlyVal  = r.val / totalMonths;
+    const cur = new Date(start);
+    for (let i = 0; i < totalMonths; i++) {
+      const ym = toYearMonth(cur);
+      map[ym] = (map[ym] || 0) + monthlyVal;
+      cur.setMonth(cur.getMonth() + 1);
+    }
+  });
+  return map;
+}
+
+/* ═══════════════════════════════════════════
+   FORECAST PANEL
+═══════════════════════════════════════════ */
+function renderForecast(d) {
+  FORECAST_DATA = d;
+  const cfg = getCfg();
+
+  /* ── Historical PSOW counts ── */
+  const withReceived = d.filter(r => r.received);
+  const histMonths   = monthRange(withReceived, 'received');
+  const recvMap      = groupByMonth(withReceived, 'received');
+  const recvArr      = histMonths.map(m => recvMap[m] || 0);
+  const totalRecv    = recvArr.reduce((s,v) => s+v, 0) || 1;
+
+  // Derive base rates from data (used as starting point; sliders override)
+  const dataProgRate  = d.filter(r=>r.group==='progressed').length / (withReceived.length||1);
+  const dataWithdRate = d.filter(r=>r.group==='withdrawn').length  / (withReceived.length||1);
+  const avgMonthly    = totalRecv / (histMonths.length || 1);
+
+  // Seasonal intake pattern
+  const seasonal = {}, counts = {};
+  withReceived.forEach(r => {
+    const mo = r.received.getMonth()+1;
+    seasonal[mo] = (seasonal[mo]||0) + 1;
+    counts[mo]   = (counts[mo]||0)   + 1;
+  });
+  const seasonalAvg = {};
+  for (let m = 1; m <= 12; m++) seasonalAvg[m] = counts[m] ? seasonal[m]/counts[m] : avgMonthly;
+  const rawAvg      = Object.values(seasonalAvg).reduce((s,v) => s+v, 0) / 12;
+  const scaleFactor = avgMonthly / (rawAvg || 1);
+
+  // Forecast months
+  const lastHistYM  = histMonths[histMonths.length-1] || '2026-04';
+  const [ly, lm]    = lastHistYM.split('-').map(Number);
+  const startFore   = new Date(ly, lm, 1);
+  const foreMonthKeys = [], foreRecv = [], foreProg = [], foreWithdr = [];
+
+  for (let i = 0; i < cfg.horizon; i++) {
+    const dt  = new Date(startFore.getFullYear(), startFore.getMonth() + i, 1);
+    const ym  = toYearMonth(dt);
+    const mo  = dt.getMonth() + 1;
+    const yOff = i / 12;
+    const intake = Math.round((seasonalAvg[mo] || avgMonthly) * scaleFactor * Math.pow(1 + cfg.growth, yOff));
+    foreMonthKeys.push(ym);
+    foreRecv.push(intake);
+    foreProg.push(Math.round(intake * cfg.progRate));
+    foreWithdr.push(Math.round(intake * cfg.withdRate));
+  }
+
+  /* ── Historical actual PSOW counts ── */
+  const histProgArr  = histMonths.map(m => groupByMonth(d.filter(r=>r.group==='progressed'), 'received')[m] || 0);
+  const histWithdArr = histMonths.map(m => groupByMonth(d.filter(r=>r.group==='withdrawn'),  'received')[m] || 0);
+
+  const allCountLabels = [...histMonths.map(fmtMonth), ...foreMonthKeys.map(fmtMonth)];
+  const hLen = histMonths.length;
+  const fLen = foreMonthKeys.length;
+  const wN   = (arr, n) => [...arr, ...Array(n).fill(null)];
+  const pN   = (arr, n) => [...Array(n).fill(null), ...arr];
+
+  /* ── CHART 1: Monthly PSOW count ── */
+  const countDS = [
+    {label:'Received (actual)',    data:wN(recvArr,fLen),      borderColor:'#2563b8',backgroundColor:'transparent',tension:0.35,pointRadius:3,pointBackgroundColor:'#2563b8',borderWidth:2},
+    {label:'Received (forecast)',  data:pN(foreRecv,hLen),     borderColor:'#2563b8',backgroundColor:'rgba(37,99,184,0.06)',fill:true,tension:0.35,pointRadius:2,pointBackgroundColor:'#2563b8',borderWidth:2,borderDash:[5,3]},
+    {label:'Progressed (actual)',  data:wN(histProgArr,fLen),  borderColor:'#15803d',backgroundColor:'transparent',tension:0.35,pointRadius:3,pointBackgroundColor:'#15803d',borderWidth:2},
+    {label:'Progressed (forecast)',data:pN(foreProg,hLen),     borderColor:'#15803d',backgroundColor:'rgba(21,128,61,0.06)',fill:true,tension:0.35,pointRadius:2,pointBackgroundColor:'#15803d',borderWidth:2,borderDash:[5,3]},
+    {label:'Withdrawn (actual)',   data:wN(histWithdArr,fLen), borderColor:'#b91c1c',backgroundColor:'transparent',tension:0.35,pointRadius:3,pointBackgroundColor:'#b91c1c',borderWidth:2},
+    {label:'Withdrawn (forecast)', data:pN(foreWithdr,hLen),   borderColor:'#b91c1c',backgroundColor:'rgba(185,28,28,0.05)',fill:true,tension:0.35,pointRadius:2,pointBackgroundColor:'#b91c1c',borderWidth:1.5,borderDash:[3,4]},
+  ];
+  makeLegend('leg-fore-monthly', countDS.filter((_,i)=>i%2===0).map(ds=>({label:ds.label.replace(' (actual)',''),color:ds.borderColor})), 'fore-monthly');
+  destroyChart('fore-monthly');
+  CHARTS['fore-monthly'] = new Chart(document.getElementById('c-fore-monthly'), {
+    type:'line', data:{labels:allCountLabels, datasets:countDS},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,filter:i=>i.raw!==null}},
+      scales:{x:{ticks:{font:{size:9},maxRotation:45,autoSkip:true,maxTicksLimit:16},grid:{color:ctx=>ctx.index===hLen?'rgba(186,117,23,0.6)':'rgba(0,0,0,0.05)'}},y:{beginAtZero:true,ticks:{font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}}}
+    }
+  });
+
+  /* ── CHART 2: Cumulative PSOW count ── */
+  const cumRH  = cumArr(recvArr);
+  const cumPH  = cumArr(histProgArr);
+  const cumWH  = cumArr(histWithdArr);
+  const cumRF  = cumArr(foreRecv,  cumRH[cumRH.length-1]||0);
+  const cumPF  = cumArr(foreProg,  cumPH[cumPH.length-1]||0);
+  const cumWF  = cumArr(foreWithdr,cumWH[cumWH.length-1]||0);
+  const cumCDS = [
+    {label:'Received (actual)',    data:wN(cumRH,fLen), borderColor:'#2563b8',backgroundColor:'transparent',tension:0.3,pointRadius:3,pointBackgroundColor:'#2563b8',borderWidth:2.5},
+    {label:'Received (forecast)',  data:pN(cumRF,hLen), borderColor:'#2563b8',backgroundColor:'rgba(37,99,184,0.07)',fill:true,tension:0.3,pointRadius:2,pointBackgroundColor:'#2563b8',borderWidth:2,borderDash:[5,3]},
+    {label:'Progressed (actual)',  data:wN(cumPH,fLen), borderColor:'#15803d',backgroundColor:'transparent',tension:0.3,pointRadius:3,pointBackgroundColor:'#15803d',borderWidth:2.5},
+    {label:'Progressed (forecast)',data:pN(cumPF,hLen), borderColor:'#15803d',backgroundColor:'rgba(21,128,61,0.07)',fill:true,tension:0.3,pointRadius:2,pointBackgroundColor:'#15803d',borderWidth:2,borderDash:[5,3]},
+    {label:'Withdrawn (actual)',   data:wN(cumWH,fLen), borderColor:'#b91c1c',backgroundColor:'transparent',fill:false,tension:0.3,pointRadius:3,pointBackgroundColor:'#b91c1c',borderWidth:2},
+    {label:'Withdrawn (forecast)', data:pN(cumWF,hLen), borderColor:'#b91c1c',backgroundColor:'transparent',fill:false,tension:0.3,pointRadius:2,pointBackgroundColor:'#b91c1c',borderWidth:1.5,borderDash:[3,4]},
+  ];
+  makeLegend('leg-fore-cum', cumCDS.filter((_,i)=>i%2===0).map(ds=>({label:ds.label.replace(' (actual)',''),color:ds.borderColor})), 'fore-cum');
+  destroyChart('fore-cum');
+  CHARTS['fore-cum'] = new Chart(document.getElementById('c-fore-cum'), {
+    type:'line', data:{labels:allCountLabels, datasets:cumCDS},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,filter:i=>i.raw!==null}},
+      scales:{x:{ticks:{font:{size:9},maxRotation:45,autoSkip:true,maxTicksLimit:16},grid:{color:ctx=>ctx.index===hLen?'rgba(186,117,23,0.6)':'rgba(0,0,0,0.05)'}},y:{beginAtZero:true,ticks:{font:{size:11}},grid:{color:'rgba(0,0,0,0.05)'}}}
+    }
+  });
+
+  /* ── REVENUE: historical spread ── */
+  const withBoth = d.filter(r => r.sowStart && r.sowEnd && r.val > 0);
+  const avgValPerPSOW = withBoth.length
+    ? (withBoth.reduce((s,r) => s+r.val, 0) / withBoth.length) * cfg.valMult
+    : 78000 * cfg.valMult;
+  const coverage = withBoth.length / (d.length || 1);
+
+  // Spread actual PSOW values across their duration
+  const spreadMap  = buildSpreadRevMap(withBoth);
+  // Also build spread by group
+  const spreadProg = buildSpreadRevMap(withBoth.filter(r=>r.group==='progressed'));
+  const spreadWith = buildSpreadRevMap(withBoth.filter(r=>r.group==='withdrawn'));
+
+  // Build a unified month axis covering both history and forecast
+  const allRevMonths = [];
+  {
+    const all = [...new Set([...Object.keys(spreadMap), ...foreMonthKeys])].sort();
+    // fill contiguous from earliest to last forecast
+    if (all.length) {
+      const [fy,fm] = all[0].split('-').map(Number);
+      const [ly2,lm2] = foreMonthKeys[foreMonthKeys.length-1].split('-').map(Number);
+      const cur = new Date(fy, fm-1, 1);
+      const end = new Date(ly2, lm2-1, 1);
+      while (cur <= end) { allRevMonths.push(toYearMonth(cur)); cur.setMonth(cur.getMonth()+1); }
+    }
+  }
+  const revHLen = allRevMonths.filter(m => m <= lastHistYM).length;
+
+  // Historical monthly spread revenue arrays
+  const histSpreadAll  = allRevMonths.map(m => m <= lastHistYM ? Math.round(spreadMap[m]||0)  : null);
+  const histSpreadProg = allRevMonths.map(m => m <= lastHistYM ? Math.round(spreadProg[m]||0) : null);
+  const histSpreadWith = allRevMonths.map(m => m <= lastHistYM ? Math.round(spreadWith[m]||0) : null);
+
+  // ── Forecast monthly revenue ──
+  // For each forecast month, expected revenue = new PSOWs progressed * avg_val spread over avg_duration
+  // Plus a rolling stock from prior months' PSOWs still running
+  // Simpler but correct: use same spread logic, generating synthetic PSOWs
+  // Avg duration from actuals
+  const durationsMonths = withBoth
+    .filter(r => r.sowEnd > r.sowStart)
+    .map(r => Math.max(1, Math.round((r.sowEnd - r.sowStart) / (30.44 * 24 * 3600 * 1000))));
+  const avgDurMonths = durationsMonths.length
+    ? Math.round(durationsMonths.reduce((s,v)=>s+v,0) / durationsMonths.length)
+    : 4;
+
+  // Build forecast revenue by spreading each month's forecast progressed value across avgDurMonths
+  const foreRevMap = {};
+  foreMonthKeys.forEach((ym, i) => {
+    const yOff   = i / 12;
+    // Revenue per received PSOW = avgVal × coverage. Do NOT multiply by progRate again — that would double-count.
+    // The valMult slider (avgValPerPSOW) lets users adjust the revenue upside from better progression.
+    const newVal = foreRecv[i] * avgValPerPSOW * coverage * Math.pow(1 + cfg.valGrowth, yOff);
+    const perMonth = newVal / avgDurMonths;
+    for (let d2 = 0; d2 < avgDurMonths; d2++) {
+      const dt  = new Date(parseInt(ym.split('-')[0]), parseInt(ym.split('-')[1])-1 + d2, 1);
+      const ym2 = toYearMonth(dt);
+      foreRevMap[ym2] = (foreRevMap[ym2] || 0) + perMonth;
+    }
+  });
+  const foreRevArr = allRevMonths.map(m => m > lastHistYM ? Math.round(foreRevMap[m]||0) : null);
+
+  // Additional revenue streams
+  const baselineArr = allRevMonths.map((m, i) => {
+    if (m <= lastHistYM) return null;
+    const fi = allRevMonths.slice(revHLen).indexOf(m);
+    const yOff = fi / 12;
+    return Math.round(cfg.baseline * Math.pow(1 + cfg.baselineGrowth, yOff));
+  });
+  const oppsArr = allRevMonths.map(m => m > lastHistYM ? Math.round(cfg.opps * cfg.oppsConv) : null);
+
+  /* ── CHART 3: Monthly revenue ── */
+  const revMonthDS = [
+    {label:'PSOW revenue (actual, spread)', data:histSpreadAll,  borderColor:'#2563b8',backgroundColor:'rgba(37,99,184,0.07)',fill:true,tension:0.3,pointRadius:2,pointBackgroundColor:'#2563b8',borderWidth:2},
+    {label:'PSOW revenue (forecast)',        data:foreRevArr,     borderColor:'#2563b8',backgroundColor:'rgba(37,99,184,0.04)',fill:true,tension:0.3,pointRadius:2,pointBackgroundColor:'#2563b8',borderWidth:2,borderDash:[5,3]},
+    {label:'Baseline AMS Run',               data:baselineArr,    borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,0.06)',fill:true,tension:0.3,pointRadius:2,pointBackgroundColor:'#7c3aed',borderWidth:1.5,borderDash:[3,3]},
+    {label:'Non-weighted opportunities',     data:oppsArr,        borderColor:'#92400e',backgroundColor:'rgba(146,64,14,0.06)',fill:true,tension:0.3,pointRadius:2,pointBackgroundColor:'#92400e',borderWidth:1.5,borderDash:[2,4]},
+  ];
+  makeLegend('leg-fore-rev-monthly', revMonthDS.map(ds=>({label:ds.label,color:ds.borderColor})), 'fore-rev-monthly');
+  destroyChart('fore-rev-monthly');
+  CHARTS['fore-rev-monthly'] = new Chart(document.getElementById('c-fore-rev-monthly'), {
+    type:'line', data:{labels:allRevMonths.map(fmtMonth), datasets:revMonthDS},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,filter:i=>i.raw!==null&&i.raw>0,callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmtVal(ctx.raw)}`}}},
+      scales:{x:{ticks:{font:{size:9},maxRotation:45,autoSkip:true,maxTicksLimit:16},grid:{color:ctx=>ctx.index===revHLen?'rgba(186,117,23,0.6)':'rgba(0,0,0,0.05)'}},y:{beginAtZero:true,ticks:{font:{size:11},callback:v=>fmtVal(v)},grid:{color:'rgba(0,0,0,0.05)'}}}
+    }
+  });
+
+  /* ── CHART 4: Cumulative revenue ── */
+  const cumHistSpread = cumArr(allRevMonths.map(m => m <= lastHistYM ? (spreadMap[m]||0) : 0)).map((v,i) => allRevMonths[i] <= lastHistYM ? Math.round(v) : null);
+  const startCumHist  = Math.round(Object.values(spreadMap).filter((_,i) => allRevMonths[i] <= lastHistYM).reduce((s,v)=>s+v, 0));
+
+  // rolling cumulative from hist end
+  let runFore=0, runBase=0, runOpps=0, runTotal=0;
+  const cumForeRev=[], cumBase=[], cumOpps=[], cumTotal=[];
+  allRevMonths.forEach((m, i) => {
+    if (m <= lastHistYM) { cumForeRev.push(null); cumBase.push(null); cumOpps.push(null); cumTotal.push(null); return; }
+    runFore  += foreRevMap[m]||0;
+    runBase  += baselineArr[i]||0;
+    runOpps  += oppsArr[i]||0;
+    runTotal += (foreRevMap[m]||0) + (baselineArr[i]||0) + (oppsArr[i]||0);
+    const histEnd = cumHistSpread.filter(v=>v!==null).slice(-1)[0] || 0;
+    cumForeRev.push(Math.round(histEnd + runFore));
+    cumBase.push(Math.round(runBase));
+    cumOpps.push(Math.round(runOpps));
+    cumTotal.push(Math.round(histEnd + runTotal));
+  });
+
+  const cumValDS = [
+    {label:'PSOW revenue (actual, spread)', data:cumHistSpread, borderColor:'#2563b8',backgroundColor:'transparent',tension:0.3,pointRadius:3,pointBackgroundColor:'#2563b8',borderWidth:2.5},
+    {label:'PSOW revenue (forecast)',        data:cumForeRev,   borderColor:'#2563b8',backgroundColor:'rgba(37,99,184,0.07)',fill:true,tension:0.3,pointRadius:2,pointBackgroundColor:'#2563b8',borderWidth:2,borderDash:[5,3]},
+    {label:'Baseline AMS Run (cumulative)',  data:cumBase,      borderColor:'#7c3aed',backgroundColor:'transparent',fill:false,tension:0.3,pointRadius:2,pointBackgroundColor:'#7c3aed',borderWidth:1.5,borderDash:[3,3]},
+    {label:'Non-weighted opps (cumulative)', data:cumOpps,      borderColor:'#92400e',backgroundColor:'transparent',fill:false,tension:0.3,pointRadius:2,pointBackgroundColor:'#92400e',borderWidth:1.5,borderDash:[2,4]},
+    {label:'Total revenue (forecast)',       data:cumTotal,     borderColor:'#166534',backgroundColor:'rgba(22,101,52,0.07)',fill:true,tension:0.3,pointRadius:2,pointBackgroundColor:'#166534',borderWidth:2,borderDash:[6,2]},
+  ];
+  makeLegend('leg-fore-val', cumValDS.map(ds=>({label:ds.label,color:ds.borderColor})), 'fore-val');
+  destroyChart('fore-val');
+  CHARTS['fore-val'] = new Chart(document.getElementById('c-fore-val'), {
+    type:'line', data:{labels:allRevMonths.map(fmtMonth), datasets:cumValDS},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,filter:i=>i.raw!==null&&i.raw>0,callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmtVal(ctx.raw)}`}}},
+      scales:{x:{ticks:{font:{size:9},maxRotation:45,autoSkip:true,maxTicksLimit:16},grid:{color:ctx=>ctx.index===revHLen?'rgba(186,117,23,0.6)':'rgba(0,0,0,0.05)'}},y:{beginAtZero:true,ticks:{font:{size:11},callback:v=>fmtVal(v)},grid:{color:'rgba(0,0,0,0.05)'}}}
+    }
+  });
+
+  /* ── Metrics ── */
+  const forecastedPSOWs = foreRecv.reduce((s,v)=>s+v,0);
+  const forecastedProg  = foreProg.reduce((s,v)=>s+v,0);
+  const totalForecastRev = (cumTotal.filter(v=>v!==null).slice(-1)[0]||0);
+  const finalPSOWRev    = (cumForeRev.filter(v=>v!==null).slice(-1)[0]||0);
+  const taBase          = avgTurnaround(d);
+  const taFinal         = Math.round(taBase * Math.pow(1 - cfg.taImprove, cfg.horizon/12));
+
+  document.getElementById('metrics-forecast').innerHTML = `
+    <div class="metric-card"><div class="m-label">Forecast PSOWs received</div><div class="m-value">${forecastedPSOWs}</div><div class="m-sub">over ${cfg.horizon} months</div></div>
+    <div class="metric-card"><div class="m-label">Expected to progress</div><div class="m-value">${forecastedProg}</div><div class="m-sub">${Math.round(cfg.progRate*100)}% progression rate</div></div>
+    <div class="metric-card"><div class="m-label">PSOW revenue (forecast)</div><div class="m-value">${fmtVal(finalPSOWRev)}</div><div class="m-sub">cumulative, spread across durations</div></div>
+    <div class="metric-card"><div class="m-label">Total revenue (all streams)</div><div class="m-value" style="color:var(--green)">${fmtVal(totalForecastRev)}</div><div class="m-sub">incl. baseline + opps</div></div>
+    <div class="metric-card"><div class="m-label">Turnaround at end of period</div><div class="m-value">${taFinal > 0 ? taFinal : '—'} days</div><div class="m-sub">${Math.round(cfg.taImprove*100)}% pa improvement applied</div></div>
+  `;
+}
+
+/* ═══════════════════════════════════════════
+   TABLE PANEL
+═══════════════════════════════════════════ */
+function renderTable(d) {
+  document.getElementById('table-count').textContent = `${d.length} records`;
+  const cols = ['ref','title','status','category','owner','val','received','sowStart','risk','group'];
+  const headers = ['Reference','Title','Status','Category','Owner','Value','Received','SOW Start','Risk','Group'];
+
+  document.getElementById('table-head').innerHTML =
+    '<tr>' + headers.map(h=>`<th>${h}</th>`).join('') + '</tr>';
+
+  const fmt = (r,k) => {
+    if (k==='status')   return statusPill(r[k]);
+    if (k==='val')      return r[k]>0 ? `<span style="font-family:'DM Mono',monospace;font-size:11px">${fmtVal(r[k])}</span>` : '<span style="color:var(--muted)">—</span>';
+    if (k==='received'||k==='sowStart') return r[k] ? `<span style="font-family:'DM Mono',monospace;font-size:11px">${r[k].toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</span>` : '<span style="color:var(--muted)">—</span>';
+    if (k==='risk')     return r[k] ? `<span class="pill pill-red" style="font-size:10px">${r[k]}</span>` : '';
+    if (k==='group')    return `<span class="pill ${r[k]==='progressed'?'pill-green':r[k]==='withdrawn'?'pill-gray':r[k].includes('client')?'pill-purple':'pill-amber'}" style="font-size:10px">${r[k]}</span>`;
+    return `<span title="${r[k]||''}" style="max-width:160px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r[k]||'—'}</span>`;
+  };
+
+  document.getElementById('table-body').innerHTML = d.map(r =>
+    '<tr>' + cols.map(k=>`<td>${fmt(r,k)}</td>`).join('') + '</tr>'
+  ).join('');
+}
+
+/* ═══════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════ */
+function pct(a,b) { return b ? Math.round(a/b*100) : 0; }
+
+function avgTurnaround(d) {
+  const vals = d.filter(r=>r.turnaround!==null).map(r=>r.turnaround);
+  return vals.length ? Math.round(vals.reduce((s,v)=>s+v,0)/vals.length) : 0;
+}
+
+function showPanel(name, btn) {
+  document.querySelectorAll('.panel-section').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.panel-tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+
+function resetDashboard() {
+  Object.values(CHARTS).forEach(c=>c.destroy());
+  CHARTS = {}; RAW_DATA = []; FILTERED = [];
+  document.getElementById('dashboard').style.display='none';
+  document.getElementById('upload-screen').style.display='flex';
+  document.getElementById('file-input').value='';
+}
+
+function exportCSV() {
+  const cols = ['ref','title','status','category','owner','val','received','sowStart','risk','group'];
+  const headers = ['Reference','Title','Status','Category','Owner','Value','Received','SOW Start','Risk','Group'];
+  const escape = v => `"${String(v??'').replace(/"/g,'""')}"`;
+  const fmtD = d => d ? d.toLocaleDateString('en-GB') : '';
+  const rows = FILTERED.map(r => cols.map(k => {
+    if (k==='received'||k==='sowStart') return escape(fmtD(r[k]));
+    if (k==='val') return r[k]||'';
+    return escape(r[k]??'');
+  }).join(','));
+  const csv = [headers.join(','),...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'psow_filtered_export.csv';
+  a.click();
+}
+</script>
+</body>
+</html>
